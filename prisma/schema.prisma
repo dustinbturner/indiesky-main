@@ -1,0 +1,340 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model User {
+  id              String            @id @default(cuid())
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+  blueskyDid      String            @unique
+  blueskyHandle   String            @unique
+  name            String?
+  bio             String?
+  avatarUrl       String?
+  isVerified      Boolean           @default(false)
+  company         String?
+  website         String?
+  location        String?
+  founderType     String?
+  stage           String?
+  expertise       String[]
+  reputationScore Int               @default(0)
+  bookmarks       Bookmark[]
+  collections     Collection[]
+  discussions     Discussion[]
+  reviews         Review[]          @relation("WrittenReviews")
+  receivedReviews Review[]          @relation("ReceivedReviews")
+  roadmaps        Roadmap[]         @relation("CreatedRoadmaps")
+  inProgress      RoadmapProgress[]
+  savedPosts      SavedPost[]
+  achievements    UserAchievement[]
+
+  @@index([blueskyDid])
+  @@index([blueskyHandle])
+}
+
+model Roadmap {
+  id            String            @id @default(cuid())
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+  title         String
+  description   String
+  slug          String            @unique
+  difficulty    RoadmapDifficulty
+  timeframe     String
+  status        RoadmapStatus     @default(DRAFT)
+  prerequisites String[]
+  views         Int               @default(0)
+  completions   Int               @default(0)
+  rating        Float             @default(0)
+  authorId      String
+  categoryId    String
+  version       Int               @default(1)
+  parentId      String?
+  isTemplate    Boolean           @default(false)
+  discussions   Discussion[]
+  phases        Phase[]
+  reviews       Review[]
+  author        User              @relation("CreatedRoadmaps", fields: [authorId], references: [id])
+  category      Category          @relation(fields: [categoryId], references: [id])
+  progress      RoadmapProgress[]
+  savedIn       Collection[]      @relation("CollectionToRoadmap")
+  resources     Resource[]        @relation("ResourceToRoadmap")
+
+  @@index([authorId])
+  @@index([categoryId])
+  @@index([status])
+}
+
+model Achievement {
+  id              String            @id
+  name            String
+  description     String
+  criteria        Json
+  icon            String
+  category        String
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime
+  UserAchievement UserAchievement[]
+}
+
+model UserAchievement {
+  id            String      @id
+  userId        String
+  achievementId String
+  earnedAt      DateTime    @default(now())
+  Achievement   Achievement @relation(fields: [achievementId], references: [id])
+  User          User        @relation(fields: [userId], references: [id])
+
+  @@unique([userId, achievementId])
+}
+
+model Collection {
+  id          String      @id
+  name        String
+  description String?
+  isPublic    Boolean     @default(false)
+  userId      String
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime
+  User        User        @relation(fields: [userId], references: [id])
+  SavedPost   SavedPost[] @relation("CollectionToPost")
+  Roadmaps    Roadmap[]   @relation("CollectionToRoadmap")
+}
+
+model Bookmark {
+  id        String   @id
+  userId    String
+  postUri   String
+  notes     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime
+  User      User     @relation(fields: [userId], references: [id])
+
+  @@unique([userId, postUri])
+}
+
+model SavedPost {
+  id          String       @id
+  blueskyUri  String
+  blueskyText String
+  userId      String
+  notes       String?
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime
+  User        User         @relation(fields: [userId], references: [id])
+  Collection  Collection[] @relation("CollectionToPost")
+
+  @@unique([userId, blueskyUri])
+}
+
+model Phase {
+  id          String          @id @default(cuid())
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+  title       String
+  description String
+  order       Int
+  timeframe   String
+  objectives  String[]
+  roadmapId   String
+  roadmap     Roadmap         @relation(fields: [roadmapId], references: [id], onDelete: Cascade)
+  progress    PhaseProgress[]
+  steps       Step[]
+
+  @@index([roadmapId])
+  @@index([order])
+}
+
+model Step {
+  id              String         @id @default(cuid())
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+  title           String
+  description     String
+  order           Int
+  type            StepType
+  timeframe       String
+  instructions    String
+  successCriteria String[]
+  commonPitfalls  String[]
+  alternatives    String[]
+  phaseId         String
+  phase           Phase          @relation(fields: [phaseId], references: [id], onDelete: Cascade)
+  progress        StepProgress[]
+  resources       Resource[]     @relation("ResourceToStep")
+
+  @@index([phaseId])
+  @@index([order])
+}
+
+model RoadmapProgress {
+  id          String          @id @default(cuid())
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+  startedAt   DateTime        @default(now())
+  completedAt DateTime?
+  status      ProgressStatus  @default(IN_PROGRESS)
+  userId      String
+  roadmapId   String
+  phases      PhaseProgress[]
+  roadmap     Roadmap         @relation(fields: [roadmapId], references: [id])
+  user        User            @relation(fields: [userId], references: [id])
+
+  @@unique([userId, roadmapId])
+  @@index([userId])
+  @@index([roadmapId])
+}
+
+model PhaseProgress {
+  id          String          @id @default(cuid())
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+  startedAt   DateTime        @default(now())
+  completedAt DateTime?
+  status      ProgressStatus  @default(IN_PROGRESS)
+  progressId  String
+  phaseId     String
+  phase       Phase           @relation(fields: [phaseId], references: [id])
+  progress    RoadmapProgress @relation(fields: [progressId], references: [id])
+  steps       StepProgress[]
+
+  @@unique([progressId, phaseId])
+  @@index([progressId])
+  @@index([phaseId])
+}
+
+model StepProgress {
+  id         String         @id @default(cuid())
+  createdAt  DateTime       @default(now())
+  updatedAt  DateTime       @updatedAt
+  status     ProgressStatus @default(NOT_STARTED)
+  notes      String?
+  evidence   String?
+  progressId String
+  stepId     String
+  progress   PhaseProgress  @relation(fields: [progressId], references: [id])
+  step       Step           @relation(fields: [stepId], references: [id])
+
+  @@unique([progressId, stepId])
+  @@index([progressId])
+  @@index([stepId])
+}
+
+model Category {
+  id          String    @id @default(cuid())
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  name        String    @unique
+  description String
+  slug        String    @unique
+  roadmaps    Roadmap[]
+
+  @@index([slug])
+}
+
+model Resource {
+  id          String         @id @default(cuid())
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+  title       String
+  description String
+  url         String
+  type        ResourceType
+  format      ResourceFormat
+  roadmaps    Roadmap[]      @relation("ResourceToRoadmap")
+  steps       Step[]         @relation("ResourceToStep")
+
+  @@index([type])
+}
+
+model Review {
+  id          String       @id @default(cuid())
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  content     String
+  rating      Int
+  status      ReviewStatus @default(PENDING)
+  authorId    String
+  roadmapId   String
+  recipientId String
+  author      User         @relation("WrittenReviews", fields: [authorId], references: [id])
+  recipient   User         @relation("ReceivedReviews", fields: [recipientId], references: [id])
+  roadmap     Roadmap      @relation(fields: [roadmapId], references: [id])
+
+  @@index([authorId])
+  @@index([roadmapId])
+  @@index([status])
+}
+
+model Discussion {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  title     String
+  content   String
+  authorId  String
+  roadmapId String
+  author    User     @relation(fields: [authorId], references: [id])
+  roadmap   Roadmap  @relation(fields: [roadmapId], references: [id])
+
+  @@index([authorId])
+  @@index([roadmapId])
+}
+
+enum RoadmapDifficulty {
+  BEGINNER
+  INTERMEDIATE
+  ADVANCED
+}
+
+enum RoadmapStatus {
+  DRAFT
+  IN_REVIEW
+  PUBLISHED
+  ARCHIVED
+}
+
+enum ProgressStatus {
+  NOT_STARTED
+  IN_PROGRESS
+  COMPLETED
+  ABANDONED
+}
+
+enum StepType {
+  RESEARCH
+  IMPLEMENTATION
+  VALIDATION
+  DECISION
+}
+
+enum ResourceType {
+  ARTICLE
+  VIDEO
+  TOOL
+  TEMPLATE
+  EXAMPLE
+  DOCUMENTATION
+}
+
+enum ResourceFormat {
+  URL
+  PDF
+  VIDEO
+  GITHUB
+  TEMPLATE
+}
+
+enum ReviewStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  NEEDS_REVISION
+}
